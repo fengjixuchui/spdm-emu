@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.6)
 
 INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/spdm_emu/spdm_requester_emu
                     ${PROJECT_SOURCE_DIR}/spdm_emu/spdm_emu_common
-                    ${PROJECT_SOURCE_DIR}/spdm_emu/spdm_transport_none_lib
+                    ${PROJECT_SOURCE_DIR}/include
                     ${LIBSPDM_DIR}/os_stub/spdm_device_secret_lib_sample
                     ${LIBSPDM_DIR}/include
                     ${LIBSPDM_DIR}/include/hal/${ARCH}
@@ -10,10 +10,12 @@ INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/spdm_emu/spdm_requester_emu
 )
 
 SET(src_spdm_requester_emu
-    spdm_requester.c
+    spdm_requester_spdm.c
     spdm_requester_authentication.c
     spdm_requester_measurement.c
     spdm_requester_session.c
+    spdm_requester_pci_doe.c
+    spdm_requester_mctp.c
     spdm_requester_emu.c
     ${PROJECT_SOURCE_DIR}/spdm_emu/spdm_emu_common/spdm_emu.c
     ${PROJECT_SOURCE_DIR}/spdm_emu/spdm_emu_common/command.c
@@ -21,8 +23,6 @@ SET(src_spdm_requester_emu
     ${PROJECT_SOURCE_DIR}/spdm_emu/spdm_emu_common/nv_storage.c
     ${PROJECT_SOURCE_DIR}/spdm_emu/spdm_emu_common/pcap.c
     ${PROJECT_SOURCE_DIR}/spdm_emu/spdm_emu_common/support.c
-    ${PROJECT_SOURCE_DIR}/spdm_emu/spdm_transport_none_lib/common.c
-    ${PROJECT_SOURCE_DIR}/spdm_emu/spdm_transport_none_lib/none.c
 )
 
 SET(spdm_requester_emu_LIBRARY
@@ -38,7 +38,12 @@ SET(spdm_requester_emu_LIBRARY
     spdm_secured_message_lib
     spdm_transport_mctp_lib
     spdm_transport_pcidoe_lib
+    spdm_transport_none_lib
     spdm_device_secret_lib_sample
+    mctp_requester_lib
+    pci_doe_requester_lib
+    pci_ide_km_requester_lib
+    platform_lib
 )
 
 if((TOOLCHAIN STREQUAL "KLEE") OR (TOOLCHAIN STREQUAL "CBMC"))
@@ -57,6 +62,10 @@ if((TOOLCHAIN STREQUAL "KLEE") OR (TOOLCHAIN STREQUAL "CBMC"))
                    $<TARGET_OBJECTS:spdm_transport_mctp_lib>
                    $<TARGET_OBJECTS:spdm_transport_pcidoe_lib>
                    $<TARGET_OBJECTS:spdm_device_secret_lib_sample>
+                   $<TARGET_OBJECTS:mctp_requester_lib>
+                   $<TARGET_OBJECTS:pci_doe_requester_lib>
+                   $<TARGET_OBJECTS:pci_ide_km_requester_lib>
+                   $<TARGET_OBJECTS:platform_lib>
     )
 else()
     ADD_EXECUTABLE(spdm_requester_emu ${src_spdm_requester_emu})

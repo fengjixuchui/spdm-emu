@@ -1,8 +1,8 @@
 /**
-    Copyright Notice:
-    Copyright 2021 DMTF. All rights reserved.
-    License: BSD 3-Clause License. For full text see link: https://github.com/DMTF/spdm-emu/blob/main/LICENSE.md
-**/
+ *  Copyright Notice:
+ *  Copyright 2021-2022 DMTF. All rights reserved.
+ *  License: BSD 3-Clause License. For full text see link: https://github.com/DMTF/spdm-emu/blob/main/LICENSE.md
+ **/
 
 #include "spdm_requester_emu.h"
 
@@ -18,26 +18,30 @@ uint8_t m_receive_buffer[LIBSPDM_MAX_MESSAGE_BUFFER_SIZE];
 extern SOCKET m_socket;
 
 extern void *m_spdm_context;
+extern void *m_scratch_buffer;
 
 void *spdm_client_init(void);
 
-boolean communicate_platform_data(IN SOCKET socket, IN uint32_t command,
-                  IN uint8_t *send_buffer, IN uintn bytes_to_send,
-                  OUT uint32_t *response,
-                  IN OUT uintn *bytes_to_receive,
-                  OUT uint8_t *receive_buffer);
+libspdm_return_t pci_doe_init_requester(void);
+
+bool communicate_platform_data(SOCKET socket, uint32_t command,
+                               const uint8_t *send_buffer, size_t bytes_to_send,
+                               uint32_t *response,
+                               size_t *bytes_to_receive,
+                               uint8_t *receive_buffer);
 
 #if LIBSPDM_ENABLE_CAPABILITY_MEAS_CAP
-return_status do_measurement_via_spdm(IN uint32_t *session_id);
+libspdm_return_t do_measurement_via_spdm(const uint32_t *session_id);
 #endif /*LIBSPDM_ENABLE_CAPABILITY_MEAS_CAP*/
 
 #if (LIBSPDM_ENABLE_CAPABILITY_CERT_CAP && LIBSPDM_ENABLE_CAPABILITY_CHAL_CAP)
-return_status do_authentication_via_spdm(void);
+libspdm_return_t do_authentication_via_spdm(void);
 #endif /*(LIBSPDM_ENABLE_CAPABILITY_CERT_CAP && LIBSPDM_ENABLE_CAPABILITY_CHAL_CAP)*/
 
-return_status do_session_via_spdm(IN boolean use_psk);
+libspdm_return_t do_session_via_spdm(bool use_psk);
 
-boolean init_client(OUT SOCKET *sock, IN uint16_t port)
+
+bool init_client(SOCKET *sock, uint16_t port)
 {
     SOCKET client_socket;
     struct sockaddr_in server_addr;
@@ -51,18 +55,18 @@ boolean init_client(OUT SOCKET *sock, IN uint16_t port)
 #else
                errno
 #endif
-        );
-        return FALSE;
+               );
+        return false;
     }
 
     server_addr.sin_family = AF_INET;
-    copy_mem(&server_addr.sin_addr.s_addr, &m_ip_address,
-         sizeof(struct in_addr));
+    libspdm_copy_mem(&server_addr.sin_addr.s_addr, sizeof(struct in_addr), &m_ip_address,
+                     sizeof(struct in_addr));
     server_addr.sin_port = htons(port);
-    zero_mem(server_addr.sin_zero, sizeof(server_addr.sin_zero));
+    libspdm_zero_mem(server_addr.sin_zero, sizeof(server_addr.sin_zero));
 
     ret_val = connect(client_socket, (struct sockaddr *)&server_addr,
-              sizeof(server_addr));
+                      sizeof(server_addr));
     if (ret_val == SOCKET_ERROR) {
         printf("Connect Error - %x\n",
 #ifdef _MSC_VER
@@ -70,46 +74,35 @@ boolean init_client(OUT SOCKET *sock, IN uint16_t port)
 #else
                errno
 #endif
-        );
+               );
         closesocket(client_socket);
-        return FALSE;
+        return false;
     }
 
     printf("connect success!\n");
 
     *sock = client_socket;
-    return TRUE;
+    return true;
 }
 
-doe_discovery_request_mine_t m_doe_request = {
-    {
-        PCI_DOE_VENDOR_ID_PCISIG,
-        PCI_DOE_DATA_OBJECT_TYPE_DOE_DISCOVERY, 0,
-        sizeof(m_doe_request) / sizeof(uint32_t), /* length*/
-    },
-    {
-        0, /* index*/
-    },
-};
-
-boolean platform_client_routine(IN uint16_t port_number)
+bool platform_client_routine(uint16_t port_number)
 {
     SOCKET platform_socket;
-    boolean result;
+    bool result;
     uint32_t response;
-    uintn response_size;
-    return_status status;
+    size_t response_size;
+    libspdm_return_t status;
 
 #ifdef _MSC_VER
     WSADATA ws;
     if (WSAStartup(MAKEWORD(2, 2), &ws) != 0) {
         printf("Init Windows socket Failed - %x\n", WSAGetLastError());
-        return FALSE;
+        return false;
     }
 #endif
     result = init_client(&platform_socket, port_number);
     if (!result) {
-        return FALSE;
+        return false;
     }
 
     m_socket = platform_socket;
@@ -128,31 +121,11 @@ boolean platform_client_routine(IN uint16_t port_number)
     }
 
     if (m_use_transport_layer == SOCKET_TRANSPORT_TYPE_PCI_DOE) {
-        doe_discovery_response_mine_t doe_response;
-
-        do {
-            response_size = sizeof(doe_response);
-            result = communicate_platform_data(
-                platform_socket, SOCKET_SPDM_COMMAND_NORMAL,
-                (uint8_t *)&m_doe_request, sizeof(m_doe_request),
-                &response, &response_size,
-                (uint8_t *)&doe_response);
-            if (!result) {
-                goto done;
-            }
-            ASSERT(response_size == sizeof(doe_response));
-            ASSERT(doe_response.doe_header.vendor_id ==
-                   PCI_DOE_VENDOR_ID_PCISIG);
-            ASSERT(doe_response.doe_header.data_object_type ==
-                   PCI_DOE_DATA_OBJECT_TYPE_DOE_DISCOVERY);
-            ASSERT(doe_response.doe_header.length ==
-                   sizeof(doe_response) / sizeof(uint32_t));
-            ASSERT(doe_response.doe_discovery_response.vendor_id ==
-                   PCI_DOE_VENDOR_ID_PCISIG);
-
-            m_doe_request.doe_discovery_request.index =
-                doe_response.doe_discovery_response.next_index;
-        } while (doe_response.doe_discovery_response.next_index != 0);
+        status = pci_doe_init_requester ();
+        if (LIBSPDM_STATUS_IS_ERROR(status)) {
+            printf("pci_doe_init_requester - %x\n", (uint32_t)status);
+            goto done;
+        }
     }
 
     m_spdm_context = spdm_client_init();
@@ -163,7 +136,7 @@ boolean platform_client_routine(IN uint16_t port_number)
     /* Do test - begin*/
 #if (LIBSPDM_ENABLE_CAPABILITY_CERT_CAP && LIBSPDM_ENABLE_CAPABILITY_CHAL_CAP)
     status = do_authentication_via_spdm();
-    if (RETURN_ERROR(status)) {
+    if (LIBSPDM_STATUS_IS_ERROR(status)) {
         printf("do_authentication_via_spdm - %x\n", (uint32_t)status);
         goto done;
     }
@@ -172,7 +145,7 @@ boolean platform_client_routine(IN uint16_t port_number)
 #if LIBSPDM_ENABLE_CAPABILITY_MEAS_CAP
     if ((m_exe_connection & EXE_CONNECTION_MEAS) != 0) {
         status = do_measurement_via_spdm(NULL);
-        if (RETURN_ERROR(status)) {
+        if (LIBSPDM_STATUS_IS_ERROR(status)) {
             printf("do_measurement_via_spdm - %x\n",
                    (uint32_t)status);
             goto done;
@@ -183,8 +156,8 @@ boolean platform_client_routine(IN uint16_t port_number)
 #if (LIBSPDM_ENABLE_CAPABILITY_KEY_EX_CAP || LIBSPDM_ENABLE_CAPABILITY_PSK_EX_CAP)
     if (m_use_version >= SPDM_MESSAGE_VERSION_11) {
         if ((m_exe_session & EXE_SESSION_KEY_EX) != 0) {
-            status = do_session_via_spdm(FALSE);
-            if (RETURN_ERROR(status)) {
+            status = do_session_via_spdm(false);
+            if (LIBSPDM_STATUS_IS_ERROR(status)) {
                 printf("do_session_via_spdm - %x\n",
                        (uint32_t)status);
                 goto done;
@@ -192,11 +165,22 @@ boolean platform_client_routine(IN uint16_t port_number)
         }
 
         if ((m_exe_session & EXE_SESSION_PSK) != 0) {
-            status = do_session_via_spdm(TRUE);
-            if (RETURN_ERROR(status)) {
+            status = do_session_via_spdm(true);
+            if (LIBSPDM_STATUS_IS_ERROR(status)) {
                 printf("do_session_via_spdm - %x\n",
                        (uint32_t)status);
                 goto done;
+            }
+        }
+        if ((m_exe_session & EXE_SESSION_KEY_EX) != 0) {
+            if (m_use_slot_id == 0) {
+                m_use_slot_id =  1;
+                status = do_session_via_spdm(false);
+                if (LIBSPDM_STATUS_IS_ERROR(status)) {
+                    printf("do_session_via_spdm - %x\n",
+                           (uint32_t)status);
+                    goto done;
+                }
             }
         }
     }
@@ -212,6 +196,7 @@ done:
 
     if (m_spdm_context != NULL) {
         free(m_spdm_context);
+        free(m_scratch_buffer);
     }
 
     closesocket(platform_socket);
@@ -220,7 +205,7 @@ done:
     WSACleanup();
 #endif
 
-    return TRUE;
+    return true;
 }
 
 int main(int argc, char *argv[])

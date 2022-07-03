@@ -1,8 +1,8 @@
 /**
-    Copyright Notice:
-    Copyright 2021 DMTF. All rights reserved.
-    License: BSD 3-Clause License. For full text see link: https://github.com/DMTF/spdm-emu/blob/main/LICENSE.md
-**/
+ *  Copyright Notice:
+ *  Copyright 2021-2022 DMTF. All rights reserved.
+ *  License: BSD 3-Clause License. For full text see link: https://github.com/DMTF/spdm-emu/blob/main/LICENSE.md
+ **/
 
 #ifndef __SPDM_TEST_H__
 #define __SPDM_TEST_H__
@@ -10,10 +10,6 @@
 #include "hal/base.h"
 #include "hal/library/memlib.h"
 #include "library/spdm_common_lib.h"
-#include "industry_standard/mctp.h"
-#include "industry_standard/pldm.h"
-#include "industry_standard/pcidoe.h"
-#include "industry_standard/pci_idekm.h"
 #include "spdm_device_secret_lib_internal.h"
 
 #include "os_include.h"
@@ -36,6 +32,7 @@ extern uint8_t m_use_basic_mut_auth;
 extern uint8_t m_use_mut_auth;
 extern uint8_t m_use_measurement_summary_hash_type;
 extern uint8_t m_use_measurement_operation;
+extern uint8_t m_use_measurement_attribute;
 extern uint8_t m_use_slot_id;
 extern uint8_t m_use_slot_count;
 
@@ -55,11 +52,13 @@ extern uint16_t m_support_req_asym_algo;
 extern uint16_t m_support_dhe_algo;
 extern uint16_t m_support_aead_algo;
 extern uint16_t m_support_key_schedule_algo;
+extern uint8_t m_support_other_params_support;
 
+extern uint8_t m_session_policy;
 extern uint8_t m_end_session_attributes;
 
-extern char8 *m_load_state_file_name;
-extern char8 *m_save_state_file_name;
+extern char *m_load_state_file_name;
+extern char *m_save_state_file_name;
 
 #define EXE_MODE_SHUTDOWN 0
 #define EXE_MODE_CONTINUE 1
@@ -78,34 +77,53 @@ extern uint32_t m_exe_connection;
 #define EXE_SESSION_KEY_UPDATE 0x8
 #define EXE_SESSION_HEARTBEAT 0x10
 #define EXE_SESSION_MEAS 0x20
+#define EXE_SESSION_SET_CERT 0x40
+#define EXE_SESSION_GET_CSR 0x80
 extern uint32_t m_exe_session;
 
-void dump_hex_str(IN uint8_t *buffer, IN uintn buffer_size);
+void libspdm_dump_hex_str(const uint8_t *buffer, size_t buffer_size);
 
-void dump_data(IN uint8_t *buffer, IN uintn buffer_size);
+void dump_data(const uint8_t *buffer, size_t buffer_size);
 
-void dump_hex(IN uint8_t *buffer, IN uintn buffer_size);
+void dump_hex(const uint8_t *buffer, size_t buffer_size);
 
-boolean send_platform_data(IN SOCKET socket, IN uint32_t command,
-               IN uint8_t *send_buffer, IN uintn bytes_to_send);
+bool send_platform_data(SOCKET socket, uint32_t command,
+                        const uint8_t *send_buffer, size_t bytes_to_send);
 
-boolean receive_platform_data(IN SOCKET socket, OUT uint32_t *command,
-                  OUT uint8_t *receive_buffer,
-                  IN OUT uintn *bytes_to_receive);
+bool receive_platform_data(SOCKET socket, uint32_t *command,
+                           uint8_t *receive_buffer,
+                           size_t *bytes_to_receive);
 
-boolean read_input_file(IN char8 *file_name, OUT void **file_data,
-            OUT uintn *file_size);
 
-boolean write_output_file(IN char8 *file_name, IN void *file_data,
-              IN uintn file_size);
+libspdm_return_t spdm_device_acquire_sender_buffer (
+    void *context, size_t *max_msg_size, void **msg_buf_ptr);
 
-boolean open_pcap_packet_file(IN char8 *pcap_file_name);
+void spdm_device_release_sender_buffer (
+    void *context, const void *msg_buf_ptr);
+
+libspdm_return_t spdm_device_acquire_receiver_buffer (
+    void *context, size_t *max_msg_size, void **msg_buf_ptr);
+
+void spdm_device_release_receiver_buffer (
+    void *context, const void *msg_buf_ptr);
+
+bool libspdm_read_input_file(const char *file_name, void **file_data,
+                             size_t *file_size);
+
+bool libspdm_write_output_file(const char *file_name, const void *file_data,
+                       size_t file_size);
+
+bool open_pcap_packet_file(const char *pcap_file_name);
 
 void close_pcap_packet_file(void);
 
-void append_pcap_packet_data(IN void *header, OPTIONAL IN uintn header_size,
-                 OPTIONAL IN void *data, IN uintn size);
+void append_pcap_packet_data(const void *header, size_t header_size,
+                             const void *data, size_t size);
 
 void process_args(char *program_name, int argc, char *argv[]);
+
+/* expose it because the responder/requester may use it to send/receive other message such as DOE discovery */
+extern uint8_t m_send_receive_buffer[LIBSPDM_SENDER_RECEIVE_BUFFER_SIZE];
+extern size_t m_send_receive_buffer_size;
 
 #endif

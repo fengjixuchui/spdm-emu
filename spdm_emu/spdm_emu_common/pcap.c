@@ -1,8 +1,8 @@
 /**
-    Copyright Notice:
-    Copyright 2021 DMTF. All rights reserved.
-    License: BSD 3-Clause License. For full text see link: https://github.com/DMTF/spdm-emu/blob/main/LICENSE.md
-**/
+ *  Copyright Notice:
+ *  Copyright 2021-2022 DMTF. All rights reserved.
+ *  License: BSD 3-Clause License. For full text see link: https://github.com/DMTF/spdm-emu/blob/main/LICENSE.md
+ **/
 
 #include "spdm_emu.h"
 #include "industry_standard/pcap.h"
@@ -12,12 +12,12 @@
 
 FILE *m_pcap_file;
 
-boolean open_pcap_packet_file(IN char8 *pcap_file_name)
+bool open_pcap_packet_file(const char *pcap_file_name)
 {
     pcap_global_header_t pcap_global_header;
 
     if (pcap_file_name == NULL) {
-        return FALSE;
+        return false;
     }
 
     pcap_global_header.magic_number = PCAP_GLOBAL_HEADER_MAGIC;
@@ -31,22 +31,22 @@ boolean open_pcap_packet_file(IN char8 *pcap_file_name)
     } else if (m_use_transport_layer == SOCKET_TRANSPORT_TYPE_PCI_DOE) {
         pcap_global_header.network = LINKTYPE_PCI_DOE;
     } else {
-        return FALSE;
+        return false;
     }
 
     if ((m_pcap_file = fopen(pcap_file_name, "wb")) == NULL) {
         printf("!!!Unable to open pcap file %s!!!\n", pcap_file_name);
-        return FALSE;
+        return false;
     }
 
     if ((fwrite(&pcap_global_header, 1, sizeof(pcap_global_header),
-            m_pcap_file)) != sizeof(pcap_global_header)) {
+                m_pcap_file)) != sizeof(pcap_global_header)) {
         printf("!!!Write pcap file error!!!\n");
         close_pcap_packet_file();
-        return FALSE;
+        return false;
     }
 
-    return TRUE;
+    return true;
 }
 
 void close_pcap_packet_file(void)
@@ -57,11 +57,11 @@ void close_pcap_packet_file(void)
     }
 }
 
-void append_pcap_packet_data(IN void *header, OPTIONAL IN uintn header_size,
-                 OPTIONAL IN void *data, IN uintn size)
+void append_pcap_packet_data(const void *header, size_t header_size,
+                             const void *data, size_t size)
 {
     pcap_packet_header_t pcap_packet_header;
-    uintn total_size;
+    size_t total_size;
 
     total_size = header_size + size;
 
@@ -74,12 +74,12 @@ void append_pcap_packet_data(IN void *header, OPTIONAL IN uintn header_size,
 
         pcap_packet_header.incl_len =
             (uint32_t)((total_size > PCAP_PACKET_MAX_SIZE) ?
-                     PCAP_PACKET_MAX_SIZE :
-                     total_size);
+                       PCAP_PACKET_MAX_SIZE :
+                       total_size);
         pcap_packet_header.orig_len = (uint32_t)total_size;
 
         if ((fwrite(&pcap_packet_header, 1, sizeof(pcap_packet_header),
-                m_pcap_file)) != sizeof(pcap_packet_header)) {
+                    m_pcap_file)) != sizeof(pcap_packet_header)) {
             printf("!!!Write pcap file error!!!\n");
             close_pcap_packet_file();
             return;
